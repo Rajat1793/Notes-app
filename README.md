@@ -1,8 +1,102 @@
-# Welcome to your Expo app 👋
+# 📒 Notes App — React Native + Expo
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A clean, minimal Notes App UI built with **React Native** and **Expo Router**, featuring a **papaya orange** color theme, full **dark/light mode** support, and a responsive layout for phones and tablets.
 
-## Get started
+Built as part of the **Mobile Development Cohort** assignment.
+
+---
+
+## Screens
+
+### View 1 — Notes Listing
+
+- Greeting header with avatar and dark/light mode toggle (`Switch`)
+- Horizontal category filter pills (All, UiUX, Personal, Ideas)
+- Searchable note list using `FlatList`
+- Colorful note cards (pastel in light, deep-tinted in dark) via `Pressable`
+- Bottom tab bar with a centered `+` FAB to open the editor
+
+### View 2 — Note Editor
+
+- `ImageBackground` header with live note title preview
+- Back and Save buttons in the header (`Pressable`)
+- `KeyboardAvoidingView` — keyboard never overlaps inputs
+- Large title `TextInput` + multiline body `TextInput`
+- Format toolbar (I, U, 🔗, A, H1, H2)
+- Full-width Save Note footer button
+
+---
+
+## React Native Components Used
+
+| Component              | Used in                                |
+| ---------------------- | -------------------------------------- |
+| `FlatList`             | Listing screen — note cards            |
+| `TextInput`            | Search bar, note title, note body      |
+| `Pressable`            | Cards, FAB, Back, Save, category pills |
+| `Switch`               | Dark/light mode toggle                 |
+| `KeyboardAvoidingView` | Editor screen                          |
+| `ImageBackground`      | Editor header                          |
+| `SafeAreaView`         | Listing screen wrapper                 |
+| `ScrollView`           | Category pills, editor body            |
+| `StatusBar`            | Theme-aware status bar                 |
+| `View`, `Text`         | Layout and typography throughout       |
+
+---
+
+## Hooks Used
+
+| Hook                   | Purpose                                                |
+| ---------------------- | ------------------------------------------------------ |
+| `useState`             | Theme override, search text, title/body state          |
+| `useColorScheme`       | Auto-detect system dark/light mode                     |
+| `useWindowDimensions`  | Responsive layout — 2 columns on tablets (width > 600) |
+| `useLocalSearchParams` | Pass `isDark` param from listing → editor screen       |
+
+---
+
+## StyleSheet APIs Used
+
+| API                    | Where                                                  |
+| ---------------------- | ------------------------------------------------------ |
+| `StyleSheet.create()`  | All styles in every file                               |
+| `StyleSheet.flatten()` | Search bar (merges base + theme styles)                |
+| `StyleSheet.compose()` | Editor save button (merges `btnBase` + `saveBtnExtra`) |
+
+---
+
+## Theme
+
+The app uses a **papaya orange** (`#FF6B2B`) accent color throughout.
+
+|            | Light                | Dark                    |
+| ---------- | -------------------- | ----------------------- |
+| Background | `#FFFAF7` warm cream | `#110E0A` espresso      |
+| Accent     | `#FF6B2B`            | `#FF7A40`               |
+| Cards      | Pastel tints         | Deep tinted backgrounds |
+
+Theme is detected automatically via `useColorScheme()`. The `Switch` in the listing header lets the user override it. The selected theme is passed to the editor via Expo Router params so both screens always stay in sync.
+
+---
+
+## Project Structure
+
+```
+src/
+├── app/
+│   ├── _layout.tsx          — Expo Router Stack (headerShown: false)
+│   ├── index.tsx            — View 1: Notes Listing Screen
+│   └── editor.tsx           — View 2: Note Editor Screen
+└── components/
+    └── NoteCard.js          — Reusable note card component
+assets/
+└── images/
+    └── logo-glow.png        — ImageBackground for editor header
+```
+
+---
+
+## Getting Started
 
 1. Install dependencies
 
@@ -16,18 +110,28 @@ This is an [Expo](https://expo.dev) project created with [`create-expo-app`](htt
    npx expo start
    ```
 
-In the output, you'll find options to open the app in a
+3. Scan the QR code with **Expo Go** on your phone, or press `i` for iOS Simulator / `a` for Android Emulator.
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+---
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+## Additional Improvements
 
-## Get a fresh project
+- Category filter pills with live count badges
+- Colorful per-card background tints (6 rotating colors, theme-aware)
+- Category tag chips on each note card
+- Theme toggle synced across both screens via route params
+- Bottom tab bar UI (Home, Calendar, +, Category, Profile)
+- Format toolbar in the editor (I, U, 🔗, A, H1, H2)
+- Responsive 2-column grid layout on tablets
 
-When you're ready, run:
+---
+
+## Tech Stack
+
+- **React Native** 0.83.6
+- **Expo** ~55.0.23
+- **Expo Router** ~55.0.14 (file-based routing)
+- **TypeScript** ~5.9.2
 
 ```bash
 npm run reset-project
@@ -35,22 +139,6 @@ npm run reset-project
 
 This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
 
-### Other setup steps
+## Reference for the starter template:
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
-
-## Learn more
-
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+https://dribbble.com/shots/24116561-Note-App-UXUI-Design
