@@ -1,18 +1,19 @@
+import { loadNotes, Note, saveNotes } from "@/utils/storage";
 import { router, useLocalSearchParams } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
-    ImageBackground,
-    KeyboardAvoidingView,
-    Platform,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    useColorScheme,
-    useWindowDimensions,
-    View,
-    ViewStyle,
+  ImageBackground,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  useColorScheme,
+  useWindowDimensions,
+  View,
+  ViewStyle,
 } from "react-native";
 
 const headerImage = require("../../assets/images/logo-glow.png");
@@ -29,9 +30,11 @@ const lightColors = {
   overlay: "rgba(20,10,2,0.60)",
   saveBtn: "#FF6B2B",
   saveBtnText: "#FFFFFF",
-  toolbar: "#FFFFFF",
-  toolbarBorder: "#EDE6E1",
-  toolbarIcon: "#A09080",
+  chipBg: "rgba(255,107,43,0.10)",
+  chipText: "#FF6B2B",
+  keywordBorder: "#EDE6E1",
+  deleteBtn: "rgba(220,38,38,0.08)",
+  deleteBtnText: "#DC2626",
 };
 
 const darkColors = {
@@ -45,23 +48,97 @@ const darkColors = {
   overlay: "rgba(0,0,0,0.68)",
   saveBtn: "#FF7A40",
   saveBtnText: "#110E0A",
-  toolbar: "#1A1510",
-  toolbarBorder: "#2D2420",
-  toolbarIcon: "#6A5A52",
+  chipBg: "rgba(255,122,64,0.14)",
+  chipText: "#FF7A40",
+  keywordBorder: "#2D2420",
+  deleteBtn: "rgba(220,38,38,0.12)",
+  deleteBtnText: "#F87171",
 };
-
-const FORMAT_TOOLS = ["I", "U", "🔗", "A", "H1", "H2"];
 
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function NoteEditorScreen() {
   const systemScheme = useColorScheme();
-  const { dark } = useLocalSearchParams<{ dark?: string }>();
+  const { dark, id } = useLocalSearchParams<{ dark?: string; id?: string }>();
   const isDark = dark !== undefined ? dark === "1" : systemScheme === "dark";
   const colors = isDark ? darkColors : lightColors;
   const { width } = useWindowDimensions();
 
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
+  const [category, setCategory] = useState("Personal");
+  const [keywords, setKeywords] = useState<string[]>([]);
+  const [kwInput, setKwInput] = useState("");
+
+  // Load existing note when editing
+  useEffect(() => {
+    if (id) {
+      loadNotes().then((notes) => {
+        const note = notes.find((n: Note) => n.id === id);
+        if (note) {
+          setTitle(note.title);
+          setBody(note.content);
+          setCategory(note.category);
+          setKeywords(note.keywords ?? []);
+        }
+      });
+    }
+  }, [id]);
+
+  const addKeyword = () => {
+    const kw = kwInput.trim().toLowerCase();
+    if (kw && !keywords.includes(kw)) {
+      setKeywords((prev) => [...prev, kw]);
+    }
+    setKwInput("");
+  };
+
+  const removeKeyword = (kw: string) => {
+    setKeywords((prev) => prev.filter((k) => k !== kw));
+  };
+
+  const handleSave = async () => {
+    if (!title.trim()) return;
+    const notes = await loadNotes();
+    const today = new Date().toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+    });
+    if (id) {
+      // Update existing
+      const updated = notes.map((n: Note) =>
+        n.id === id
+          ? {
+              ...n,
+              title: title.trim(),
+              content: body,
+              date: today,
+              category,
+              keywords,
+            }
+          : n,
+      );
+      await saveNotes(updated);
+    } else {
+      // Create new
+      const newNote: Note = {
+        id: Date.now().toString(),
+        title: title.trim(),
+        content: body,
+        date: today,
+        category,
+        keywords,
+      };
+      await saveNotes([newNote, ...notes]);
+    }
+    router.back();
+  };
+
+  const handleDelete = async () => {
+    if (!id) return;
+    const notes = await loadNotes();
+    await saveNotes(notes.filter((n: Note) => n.id !== id));
+    router.back();
+  };
 
   const hPad = width > 600 ? 40 : 20;
 
@@ -105,7 +182,7 @@ export default function NoteEditorScreen() {
               styles.headerSaveExtra,
               { backgroundColor: colors.accent, opacity: pressed ? 0.8 : 1 },
             ]}
-            onPress={() => router.back()}>
+            onPress={handleSave}>
             <Text
               style={[styles.headerSaveText, { color: colors.saveBtnText }]}>
               Save
@@ -158,27 +235,56 @@ export default function NoteEditorScreen() {
           multiline
           textAlignVertical="top"
         />
+        {/* Keywords section */}
+        <View style={styles.keywordsSection}>
+          <Text style={[styles.kwLabel, { color: colors.muted }]}>
+            Keywords
+          </Text>
+          {/* Chip row */}
+          {keywords.length > 0 && (
+            <View style={styles.chipRow}>
+              {keywords.map((kw) => (
+                <Pressable
+                  key={kw}
+                  style={[styles.chip, { backgroundColor: colors.chipBg }]}
+                  onPress={() => removeKeyword(kw)}>
+                  <Text style={[styles.chipText, { color: colors.chipText }]}>
+                    {kw} ×
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
+          {/* Keyword input */}
+          <View
+            style={[
+              styles.kwInputRow,
+              {
+                borderColor: colors.keywordBorder,
+                backgroundColor: colors.input,
+              },
+            ]}>
+            <TextInput
+              style={[styles.kwInput, { color: colors.text }]}
+              placeholder="Add keyword..."
+              placeholderTextColor={colors.muted}
+              value={kwInput}
+              onChangeText={setKwInput}
+              onSubmitEditing={addKeyword}
+              returnKeyType="done"
+              autoCapitalize="none"
+              blurOnSubmit={false}
+            />
+            <Pressable
+              style={[styles.kwAddBtn, { backgroundColor: colors.accent }]}
+              onPress={addKeyword}>
+              <Text style={[styles.kwAddText, { color: colors.saveBtnText }]}>
+                +
+              </Text>
+            </Pressable>
+          </View>
+        </View>
       </ScrollView>
-
-      {/* ── Format Toolbar ── */}
-      <View
-        style={[
-          styles.toolbar,
-          {
-            backgroundColor: colors.toolbar,
-            borderTopColor: colors.toolbarBorder,
-          },
-        ]}>
-        {FORMAT_TOOLS.map((tool) => (
-          <Pressable key={tool} style={styles.toolBtn}>
-            <Text style={[styles.toolText, { color: colors.toolbarIcon }]}>
-              {tool}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
-
-      {/* ── Save Footer ── */}
       <View
         style={[
           styles.footer,
@@ -188,12 +294,29 @@ export default function NoteEditorScreen() {
             paddingHorizontal: hPad,
           },
         ]}>
+        {/* Delete button — only shown when editing an existing note */}
+        {id ? (
+          <Pressable
+            style={({ pressed }) => [
+              styles.deleteBtn,
+              {
+                backgroundColor: colors.deleteBtn,
+                opacity: pressed ? 0.75 : 1,
+              },
+            ]}
+            onPress={handleDelete}>
+            <Text
+              style={[styles.deleteBtnText, { color: colors.deleteBtnText }]}>
+              🗑 Delete Note
+            </Text>
+          </Pressable>
+        ) : null}
         <Pressable
           style={({ pressed }) => [
             saveButtonStyle,
             { backgroundColor: colors.saveBtn, opacity: pressed ? 0.85 : 1 },
           ]}
-          onPress={() => router.back()}>
+          onPress={handleSave}>
           <Text style={[styles.saveLabel, { color: colors.saveBtnText }]}>
             Save Note
           </Text>
@@ -290,33 +413,77 @@ const styles = StyleSheet.create({
   bodyInput: {
     fontSize: 16,
     lineHeight: 27,
-    minHeight: 280,
+    minHeight: 200,
     borderRadius: 16,
     borderWidth: 1,
     padding: 16,
+    marginBottom: 24,
   },
 
-  // Format toolbar
-  toolbar: {
+  // Keywords
+  keywordsSection: {
+    gap: 10,
+    paddingBottom: 24,
+  },
+  kwLabel: {
+    fontSize: 12,
+    fontWeight: "600",
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+  },
+  chipRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  chip: {
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  chipText: {
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  kwInputRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-around",
-    paddingVertical: 8,
-    paddingHorizontal: 8,
-    borderTopWidth: 1,
+    borderRadius: 12,
+    borderWidth: 1,
+    overflow: "hidden",
   },
-  toolBtn: {
-    padding: 10,
-    borderRadius: 8,
-  },
-  toolText: {
+  kwInput: {
+    flex: 1,
     fontSize: 15,
-    fontWeight: "600",
+    paddingHorizontal: 14,
+    paddingVertical: Platform.OS === "ios" ? 12 : 10,
+  },
+  kwAddBtn: {
+    width: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    alignSelf: "stretch",
+  },
+  kwAddText: {
+    fontSize: 22,
+    fontWeight: "300",
+    lineHeight: 26,
   },
 
   // Save footer
   footer: {
     paddingVertical: 14,
     borderTopWidth: 1,
+    gap: 10,
+  },
+  deleteBtn: {
+    borderRadius: 16,
+    paddingVertical: 13,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  deleteBtnText: {
+    fontSize: 15,
+    fontWeight: "600",
   },
 });

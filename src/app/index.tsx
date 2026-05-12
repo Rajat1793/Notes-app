@@ -1,6 +1,7 @@
 import NoteCard from "@/components/NoteCard";
-import { router } from "expo-router";
-import React, { useMemo, useState } from "react";
+import { loadNotes, Note, saveNotes } from "@/utils/storage";
+import { router, useFocusEffect } from "expo-router";
+import React, { useCallback, useMemo, useState } from "react";
 import {
   FlatList,
   Platform,
@@ -17,58 +18,28 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-// ─── Data ─────────────────────────────────────────────────────────────────────
-const NOTES = [
+// ─── Seed notes shown on first launch ────────────────────────────────────────
+const SEED_NOTES: Note[] = [
   {
-    id: "1",
-    title: "Favorite UX Book",
-    content: "Lean UX: Applying Lean Principles to Improve User Experience.",
-    date: "May 10",
-    category: "UiUX",
-  },
-  {
-    id: "2",
-    title: "Shopping List",
-    content: "Milk, eggs, bread, butter, cereal, orange juice, and apples.",
-    date: "May 9",
-    category: "Personal",
-  },
-  {
-    id: "3",
-    title: "Travel Plans",
+    id: "seed-1",
+    title: "Welcome to Notes!",
     content:
-      "Flight to NYC on June 5th. Hotel booked till June 10. Pack lightly.",
-    date: "May 8",
+      "Tap the + button to create your first note. Long-press a card to delete it.",
+    date: "Today",
     category: "Personal",
+    keywords: ["welcome", "guide"],
   },
   {
-    id: "4",
+    id: "seed-2",
     title: "Smart Home Project",
     content:
       "Interview with Stakeholders, Competitor Research, Typography Style.",
-    date: "Apr 3",
+    date: "May 12",
     category: "UiUX",
-  },
-  {
-    id: "5",
-    title: "Workout Routine",
-    content: "Mon: Chest, Tue: Back, Wed: Legs, Thu: Shoulders, Fri: Arms.",
-    date: "May 6",
-    category: "Ideas",
-  },
-  {
-    id: "6",
-    title: "Pasta Recipe",
-    content:
-      "Garlic butter sauce — boil pasta al dente, sauté garlic in butter, toss.",
-    date: "May 5",
-    category: "Personal",
+    keywords: ["ux", "research", "design"],
   },
 ];
 
-const CATEGORIES = ["All", "UiUX", "Personal", "Ideas"];
-
-// Card backgrounds — one palette per theme
 const CARD_BG_LIGHT = [
   "#EDE9FE",
   "#FFE8DF",
@@ -102,8 +73,6 @@ const lightColors = {
   pillActiveText: "#FFFFFF",
   tabBar: "#FFFFFF",
   tabBarBorder: "#F0EBE6",
-  tabIcon: "#C4B5AD",
-  tabIconActive: "#FF6B2B",
   fabText: "#FFFFFF",
   border: "#EDE6E1",
 };
@@ -123,8 +92,6 @@ const darkColors = {
   pillActiveText: "#110E0A",
   tabBar: "#1A1510",
   tabBarBorder: "#2D2420",
-  tabIcon: "#443C38",
-  tabIconActive: "#FF7A40",
   fabText: "#110E0A",
   border: "#2D2420",
 };
@@ -135,6 +102,7 @@ export default function NotesListScreen() {
   const [darkOverride, setDarkOverride] = useState<boolean | null>(null);
   const [search, setSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState("All");
+  const [notes, setNotes] = useState<Note[]>([]);
   const { width } = useWindowDimensions();
 
   const isDark = darkOverride !== null ? darkOverride : systemScheme === "dark";
@@ -142,17 +110,56 @@ export default function NotesListScreen() {
   const cardBgSet = isDark ? CARD_BG_DARK : CARD_BG_LIGHT;
   const numColumns = width > 600 ? 2 : 1;
 
+  // Derive pills: "All" + unique keywords collected from all notes
+  const pills = useMemo(() => {
+    const kwSet = new Set<string>();
+    notes.forEach((n) => (n.keywords ?? []).forEach((k) => kwSet.add(k)));
+    return ["All", ...Array.from(kwSet)];
+  }, [notes]);
+
+  // Reset active pill if it no longer exists in current keyword set
+  const activePill = pills.includes(activeCategory) ? activeCategory : "All";
+
+  // Reload notes every time the screen comes into focus (e.g. after saving in editor)
+  useFocusEffect(
+    useCallback(() => {
+      loadNotes().then((stored) => {
+        if (stored.length === 0) {
+          // First launch — seed with 2 starter notes
+          saveNotes(SEED_NOTES);
+          setNotes(SEED_NOTES);
+        } else {
+          setNotes(stored);
+        }
+      });
+    }, []),
+  );
+
+  const handleDelete = useCallback(
+    (id: string) => {
+      const updated = notes.filter((n) => n.id !== id);
+      setNotes(updated);
+      saveNotes(updated);
+    },
+    [notes],
+  );
+
   const filteredNotes = useMemo(
     () =>
-      NOTES.filter((n) => {
-        const matchCat =
-          activeCategory === "All" || n.category === activeCategory;
+      notes.filter((n) => {
+        const matchPill =
+          activePill === "All" ||
+          (n.keywords ?? []).some(
+            (k) => k.toLowerCase() === activePill.toLowerCase(),
+          );
+        const q = search.toLowerCase();
         const matchSearch =
-          n.title.toLowerCase().includes(search.toLowerCase()) ||
-          n.content.toLowerCase().includes(search.toLowerCase());
-        return matchCat && matchSearch;
+          n.title.toLowerCase().includes(q) ||
+          n.content.toLowerCase().includes(q) ||
+          (n.keywords ?? []).some((k) => k.toLowerCase().includes(q));
+        return matchPill && matchSearch;
       }),
-    [search, activeCategory],
+    [search, activePill, notes],
   );
 
   return (
@@ -209,28 +216,32 @@ export default function NotesListScreen() {
         </View>
       </View>
 
-      {/* ── Category Pills ── */}
+      {/* ── Keyword Pills ── */}
       <View style={[styles.pillsWrapper, { backgroundColor: colors.header }]}>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.pillsScroll}>
-          {CATEGORIES.map((cat) => {
-            const isActive = cat === activeCategory;
+          {pills.map((pill) => {
+            const isActive = pill === activePill;
             const count =
-              cat === "All"
-                ? NOTES.length
-                : NOTES.filter((n) => n.category === cat).length;
+              pill === "All"
+                ? notes.length
+                : notes.filter((n) =>
+                    (n.keywords ?? []).some(
+                      (k) => k.toLowerCase() === pill.toLowerCase(),
+                    ),
+                  ).length;
             return (
               <Pressable
-                key={cat}
+                key={pill}
                 style={[
                   styles.pill,
                   {
                     backgroundColor: isActive ? colors.pillActive : colors.pill,
                   },
                 ]}
-                onPress={() => setActiveCategory(cat)}>
+                onPress={() => setActiveCategory(pill)}>
                 <Text
                   style={[
                     styles.pillText,
@@ -238,7 +249,7 @@ export default function NotesListScreen() {
                       color: isActive ? colors.pillActiveText : colors.pillText,
                     },
                   ]}>
-                  {cat} ({count})
+                  {pill} ({count})
                 </Text>
               </Pressable>
             );
@@ -270,9 +281,10 @@ export default function NotesListScreen() {
             onPress={() =>
               router.push({
                 pathname: "/editor",
-                params: { dark: isDark ? "1" : "0" },
+                params: { id: item.id, dark: isDark ? "1" : "0" },
               })
-            }>
+            }
+            onLongPress={() => handleDelete(item.id)}>
             <NoteCard
               title={item.title}
               content={item.content}
@@ -293,58 +305,20 @@ export default function NotesListScreen() {
         }
       />
 
-      {/* ── Bottom Tab Bar ── */}
-      <View
-        style={[
-          styles.tabBar,
-          {
-            backgroundColor: colors.tabBar,
-            borderTopColor: colors.tabBarBorder,
-          },
-        ]}>
-        <View style={styles.tabItem}>
-          <Text style={[styles.tabIconText, { color: colors.tabIconActive }]}>
-            ⊞
-          </Text>
-          <Text style={[styles.tabLabel, { color: colors.tabIconActive }]}>
-            Home
-          </Text>
-        </View>
-        <View style={styles.tabItem}>
-          <Text style={[styles.tabIconText, { color: colors.tabIcon }]}>▦</Text>
-          <Text style={[styles.tabLabel, { color: colors.tabIcon }]}>
-            Calendar
-          </Text>
-        </View>
-        <Pressable
-          style={({ pressed }) => [
-            styles.tabFab,
-            {
-              backgroundColor: colors.accent,
-              opacity: pressed ? 0.85 : 1,
-            },
-          ]}
-          onPress={() =>
-            router.push({
-              pathname: "/editor",
-              params: { dark: isDark ? "1" : "0" },
-            })
-          }>
-          <Text style={[styles.tabFabText, { color: colors.fabText }]}>+</Text>
-        </Pressable>
-        <View style={styles.tabItem}>
-          <Text style={[styles.tabIconText, { color: colors.tabIcon }]}>⊟</Text>
-          <Text style={[styles.tabLabel, { color: colors.tabIcon }]}>
-            Category
-          </Text>
-        </View>
-        <View style={styles.tabItem}>
-          <Text style={[styles.tabIconText, { color: colors.tabIcon }]}>◯</Text>
-          <Text style={[styles.tabLabel, { color: colors.tabIcon }]}>
-            Profile
-          </Text>
-        </View>
-      </View>
+      {/* ── FAB ── */}
+      <Pressable
+        style={({ pressed }) => [
+          styles.fab,
+          { backgroundColor: colors.accent, opacity: pressed ? 0.85 : 1 },
+        ]}
+        onPress={() =>
+          router.push({
+            pathname: "/editor",
+            params: { dark: isDark ? "1" : "0" },
+          })
+        }>
+        <Text style={[styles.fabText, { color: colors.fabText }]}>+</Text>
+      </Pressable>
     </SafeAreaView>
   );
 }
@@ -446,7 +420,7 @@ const styles = StyleSheet.create({
   // List
   listContent: {
     paddingHorizontal: 12,
-    paddingBottom: 16,
+    paddingBottom: 110,
   },
   columnWrapper: {
     gap: 10,
@@ -473,44 +447,25 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
 
-  // Bottom Tab Bar
-  tabBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-around",
-    paddingHorizontal: 8,
-    paddingTop: 10,
-    paddingBottom: Platform.OS === "ios" ? 24 : 12,
-    borderTopWidth: 1,
-  },
-  tabItem: {
-    alignItems: "center",
-    flex: 1,
-    gap: 3,
-  },
-  tabIconText: {
-    fontSize: 20,
-  },
-  tabLabel: {
-    fontSize: 10,
-    fontWeight: "500",
-  },
-  tabFab: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+  // FAB
+  fab: {
+    position: "absolute",
+    bottom: 36,
+    right: 24,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 8,
-    elevation: 6,
+    elevation: 8,
     shadowColor: "#FF6B2B",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.45,
-    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
   },
-  tabFabText: {
-    fontSize: 28,
+  fabText: {
+    fontSize: 34,
     fontWeight: "300",
-    lineHeight: 32,
+    lineHeight: 38,
   },
 });
